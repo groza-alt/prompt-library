@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { emptyLibrary, loadCloudLibrary, readLegacyLibrary, saveCloudLibrary } from "./cloudLibrary";
+import { loadCachedLibrary, saveCachedLibrary } from "./localCache";
 import { supabase } from "./supabaseClient";
 
 const publicAsset = (path) => `${import.meta.env.BASE_URL}${path}`;
@@ -265,21 +266,22 @@ function useCloudLibrary(session) {
     setStorageStatus("loading");
 
     (async () => {
-      try {
-        let next = await loadCloudLibrary(session.user.id);
-        if (!next) {
-          next = readLegacyLibrary();
-          next = await saveCloudLibrary(session.user.id, next);
-        }
-        if (!active) return;
-        setLibrary(next);
-        setReady(true);
-        setStorageStatus("saved");
-      } catch (error) {
-        console.error("Cloud library load failed", error);
-        if (!active) return;
-        setStorageStatus("error");
-      }
+      const [cloudResult, cacheResult] = await Promise.allSettled([
+        loadCloudLibrary(session.user.id),
+        loadCachedLibrary(session.user.id),
+      ]);
+      const cloud = cloudResult.status === "fulfilled" ? cloudResult.value : null;
+      const cached = cacheResult.status === "fulfilled" ? cacheResult.value : null;
+      if (cloudResult.status === "rejected") console.error("Cloud library load failed", cloudResult.reason);
+      if (cacheResult.status === "rejected") console.error("Local cache load failed", cacheResult.reason);
+
+      let next = cloud;
+      if (cached && Number(cached.revision || 0) > Number(cloud?.revision || 0)) next = cached;
+      if (!next) next = readLegacyLibrary();
+      if (!active) return;
+      setLibrary({ ...emptyLibrary, ...next });
+      setReady(true);
+      setStorageStatus(cloud && next === cloud ? "saved" : "saving");
     })();
 
     return () => { active = false; };
@@ -291,6 +293,7 @@ function useCloudLibrary(session) {
     const snapshot = library;
     const hasPendingImages = [...snapshot.prompts, ...snapshot.trash].some((prompt) => prompt.image?.startsWith("data:image/"));
     setStorageStatus("saving");
+    saveCachedLibrary(session.user.id, snapshot).catch((error) => console.error("Local cache save failed", error));
 
     saveQueue.current = saveQueue.current
       .catch(() => undefined)
@@ -307,10 +310,15 @@ function useCloudLibrary(session) {
   }, [library, ready, session?.user?.id]);
 
   const setPart = useCallback((part, update) => {
-    setLibrary((current) => ({
-      ...current,
-      [part]: typeof update === "function" ? update(current[part]) : update,
-    }));
+    setLibrary((current) => {
+      const nextPart = typeof update === "function" ? update(current[part]) : update;
+      if (nextPart === current[part]) return current;
+      return {
+        ...current,
+        [part]: nextPart,
+        revision: Math.max(Date.now(), Number(current.revision || 0) + 1),
+      };
+    });
   }, []);
 
   return {

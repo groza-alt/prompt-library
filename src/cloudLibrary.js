@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export const emptyLibrary = { prompts: [], topics: [], trash: [] };
+export const emptyLibrary = { prompts: [], topics: [], trash: [], revision: 0 };
 
 function readLegacyValue(key, fallback) {
   try {
@@ -12,10 +12,14 @@ function readLegacyValue(key, fallback) {
 }
 
 export function readLegacyLibrary() {
-  return {
+  const library = {
     prompts: readLegacyValue("quiet-shelf.prompts.v1", []),
     topics: readLegacyValue("quiet-shelf.topics.v1", []),
     trash: readLegacyValue("quiet-shelf.trash.v1", []),
+  };
+  return {
+    ...library,
+    revision: library.prompts.length || library.topics.length || library.trash.length ? Date.now() : 0,
   };
 }
 
@@ -28,6 +32,7 @@ export function serializeLibrary(library) {
     prompts: stripRuntimeImages(library.prompts),
     topics: library.topics,
     trash: stripRuntimeImages(library.trash),
+    revision: library.revision || 0,
   };
 }
 
@@ -78,6 +83,7 @@ export async function prepareLibrary(userId, library) {
     prompts: await Promise.all(library.prompts.map((prompt) => preparePrompt(userId, prompt))),
     topics: library.topics,
     trash: await Promise.all(library.trash.map((prompt) => preparePrompt(userId, prompt))),
+    revision: library.revision || 0,
   };
 }
 
@@ -95,12 +101,15 @@ export async function loadCloudLibrary(userId) {
 
 export async function saveCloudLibrary(userId, library) {
   const prepared = await prepareLibrary(userId, library);
-  const { error } = await supabase.from("library_state").upsert({
+  const serialized = serializeLibrary(prepared);
+  const { data, error } = await supabase.from("library_state").upsert({
     user_id: userId,
-    data: serializeLibrary(prepared),
+    data: serialized,
     updated_at: new Date().toISOString(),
-  });
+  }).select("data").single();
   if (error) throw error;
+  if (Number(data?.data?.revision || 0) !== Number(serialized.revision || 0)) {
+    throw new Error("Cloud save verification failed");
+  }
   return prepared;
 }
-
