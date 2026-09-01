@@ -3,27 +3,52 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 const topicSeed = [];
 const promptSeed = [];
 
+function readStoredValue(key, fallback) {
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function usePersistentState(key, initialValue) {
+  const [value, setValue] = useState(() => readStoredValue(key, initialValue));
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // The app remains usable when browser storage is unavailable or full.
+    }
+  }, [key, value]);
+
+  return [value, setValue];
+}
+
+const publicAsset = (path) => `${import.meta.env.BASE_URL}${path}`;
+
 const icons = {
-  search: "/icons/search.svg",
-  plus: "/icons/plus.svg",
-  grid: "/icons/layout-grid.svg",
-  star: "/icons/star.svg",
-  starFilled: "/icons/star-filled.svg",
-  folder: "/icons/folder.svg",
-  info: "/icons/info-circle.svg",
-  copy: "/icons/copy.svg",
-  pencil: "/icons/pencil.svg",
-  close: "/icons/x.svg",
-  chevron: "/icons/chevron-down.svg",
-  photo: "/icons/photo.svg",
-  trash: "/icons/trash.svg",
-  grip: "/icons/dots-vertical.svg",
-  check: "/icons/check.svg",
-  bold: "/icons/bold.svg",
-  italic: "/icons/italic.svg",
-  list: "/icons/list-details.svg",
-  code: "/icons/code.svg",
-  link: "/icons/link.svg",
+  search: publicAsset("icons/search.svg"),
+  plus: publicAsset("icons/plus.svg"),
+  grid: publicAsset("icons/layout-grid.svg"),
+  star: publicAsset("icons/star.svg"),
+  starFilled: publicAsset("icons/star-filled.svg"),
+  folder: publicAsset("icons/folder.svg"),
+  info: publicAsset("icons/info-circle.svg"),
+  copy: publicAsset("icons/copy.svg"),
+  pencil: publicAsset("icons/pencil.svg"),
+  close: publicAsset("icons/x.svg"),
+  chevron: publicAsset("icons/chevron-down.svg"),
+  photo: publicAsset("icons/photo.svg"),
+  trash: publicAsset("icons/trash.svg"),
+  grip: publicAsset("icons/dots-vertical.svg"),
+  check: publicAsset("icons/check.svg"),
+  bold: publicAsset("icons/bold.svg"),
+  italic: publicAsset("icons/italic.svg"),
+  list: publicAsset("icons/list-details.svg"),
+  code: publicAsset("icons/code.svg"),
+  link: publicAsset("icons/link.svg"),
 };
 
 function Icon({ name, size = 18, light = false }) {
@@ -111,7 +136,7 @@ function EditorPanel({ mode, prompt, topics, onClose, onCreate, onUpdate, onAddT
 
   useEffect(() => {
     setDraft({ title: prompt?.title || "", topic: prompt?.topic || topics[0] || "Без темы", content: prompt?.content || "", image: prompt?.image || null });
-  }, [prompt?.id, mode, topics]);
+  }, [prompt?.id, mode]);
 
   useEffect(() => {
     if (mode !== "edit" || !prompt) return undefined;
@@ -209,8 +234,9 @@ function DetailPanel({ prompt, copied, onClose, onCopy, onEdit, onFavorite, onDe
 }
 
 export function App() {
-  const [prompts, setPrompts] = useState(promptSeed);
-  const [topics, setTopics] = useState(topicSeed);
+  const [prompts, setPrompts] = usePersistentState("quiet-shelf.prompts.v1", promptSeed);
+  const [topics, setTopics] = usePersistentState("quiet-shelf.topics.v1", topicSeed);
+  const [trash, setTrash] = usePersistentState("quiet-shelf.trash.v1", []);
   const [activeView, setActiveView] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
   const [panelMode, setPanelMode] = useState("closed");
@@ -221,9 +247,19 @@ export function App() {
   const [newTopicOpen, setNewTopicOpen] = useState(false);
   const [newTopic, setNewTopic] = useState("");
   const [dragTopic, setDragTopic] = useState(null);
-  const [trash, setTrash] = useState([]);
   const searchRef = useRef(null);
   const selectedPrompt = prompts.find((prompt) => prompt.id === selectedId) || null;
+
+  useEffect(() => {
+    const promptTopics = prompts.map((prompt) => prompt.topic).filter((topic) => topic && topic !== "Без темы");
+    setTopics((current) => {
+      const next = [...current];
+      promptTopics.forEach((topic) => {
+        if (!next.some((item) => item.toLocaleLowerCase("ru") === topic.toLocaleLowerCase("ru"))) next.push(topic);
+      });
+      return next.length === current.length ? current : next;
+    });
+  }, [prompts, setTopics]);
 
   const visiblePrompts = useMemo(() => {
     if (activeView === "trash") return [...trash].sort((a, b) => b.deletedAt - a.deletedAt);
@@ -257,6 +293,9 @@ export function App() {
   const openPrompt = (id) => { setSelectedId(id); setPanelMode("detail"); };
   const createPrompt = (draft) => {
     const id = Date.now();
+    if (draft.topic && draft.topic !== "Без темы") {
+      setTopics((items) => items.some((item) => item.toLocaleLowerCase("ru") === draft.topic.toLocaleLowerCase("ru")) ? items : [...items, draft.topic]);
+    }
     setPrompts((items) => [{ ...draft, id, favorite: false, updatedAt: Date.now() }, ...items]);
     setSelectedId(id); setPanelMode("detail"); setActiveView("all");
   };
