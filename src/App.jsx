@@ -272,12 +272,14 @@ function useCloudLibrary(session) {
       ]);
       const cloud = cloudResult.status === "fulfilled" ? cloudResult.value : null;
       const cached = cacheResult.status === "fulfilled" ? cacheResult.value : null;
+      const legacy = readLegacyLibrary();
       if (cloudResult.status === "rejected") console.error("Cloud library load failed", cloudResult.reason);
       if (cacheResult.status === "rejected") console.error("Local cache load failed", cacheResult.reason);
 
       let next = cloud;
       if (cached && Number(cached.revision || 0) > Number(cloud?.revision || 0)) next = cached;
-      if (!next) next = readLegacyLibrary();
+      if (Number(legacy.revision || 0) > Number(next?.revision || 0)) next = legacy;
+      if (!next) next = emptyLibrary;
       if (!active) return;
       setLibrary({ ...emptyLibrary, ...next });
       setReady(true);

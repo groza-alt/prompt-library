@@ -17,9 +17,13 @@ export function readLegacyLibrary() {
     topics: readLegacyValue("quiet-shelf.topics.v1", []),
     trash: readLegacyValue("quiet-shelf.trash.v1", []),
   };
+  const promptRevision = [...library.prompts, ...library.trash].reduce(
+    (latest, prompt) => Math.max(latest, Number(prompt.updatedAt || prompt.deletedAt || 0)),
+    0,
+  );
   return {
     ...library,
-    revision: library.prompts.length || library.topics.length || library.trash.length ? Date.now() : 0,
+    revision: promptRevision || (library.topics.length ? 1 : 0),
   };
 }
 
