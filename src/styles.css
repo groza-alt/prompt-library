@@ -19,18 +19,32 @@ kbd { font-family: inherit; font-size: 11px; color: #858585; background: transpa
 .new-prompt-button:active { transform: scale(.975); }
 .main-nav, .topic-nav { display: grid; gap: 4px; }
 .main-nav { margin-top: 20px; }
-.main-nav button, .topic-nav button, .trash-link, .info-button { width: 100%; min-height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; font-size: 14px; transition: background-color 140ms ease, transform 120ms var(--ease-out); }
-.main-nav button:hover, .topic-nav button:hover, .trash-link:hover, .info-button:hover { background: rgba(0,0,0,.04); }
-.main-nav button:active, .topic-nav button:active, .trash-link:active, .info-button:active { transform: scale(.985); }
-.main-nav button.active, .topic-nav button.active, .trash-link.active { background: #e4e4e1; font-weight: 610; }
+.main-nav button, .topic-select, .trash-link, .info-button { width: 100%; min-height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; font-size: 14px; transition: background-color 140ms ease, transform 120ms var(--ease-out); }
+.main-nav button:hover, .topic-item:hover, .trash-link:hover, .info-button:hover { background: rgba(0,0,0,.04); }
+.main-nav button:active, .topic-select:active, .trash-link:active, .info-button:active { transform: scale(.985); }
+.main-nav button.active, .trash-link.active { background: #e4e4e1; font-weight: 610; }
 .topics-heading { margin: 28px 8px 10px; display: flex; align-items: center; justify-content: space-between; color: #777; font-size: 11px; font-weight: 650; }
 .topics-heading button { width: 24px; height: 24px; display: grid; place-items: center; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
 .topics-heading button:hover { background: rgba(0,0,0,.05); }
 .new-topic-form { margin: 0 2px 6px; }
 .new-topic-form input { width: 100%; height: 36px; padding: 0 9px; border: 1px solid #d6d6d2; border-radius: 8px; background: white; outline: none; font-size: 13px; }
-.topic-nav button span { flex: 1; }
-.topic-nav button .icon:last-child { opacity: 0; transition: opacity 130ms ease; }
-.topic-nav button:hover .icon:last-child { opacity: .42; }
+.topic-item { position: relative; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; border-radius: 9px; transition: background-color 140ms ease; }
+.topic-item.active { background: #e4e4e1; }
+.topic-item.active .topic-select { font-weight: 610; }
+.topic-select { min-width: 0; }
+.topic-select span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-menu-button { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.topic-menu-button:hover, .topic-menu-button[aria-expanded="true"] { background: rgba(0,0,0,.06); }
+.topic-menu-button .icon { opacity: .52; }
+.topic-actions { position: absolute; top: calc(100% + 5px); right: 0; width: 190px; padding: 5px; display: grid; gap: 2px; background: #fff; border: 1px solid #ddddda; border-radius: 10px; box-shadow: 0 12px 28px rgba(0,0,0,.12); z-index: 20; }
+.topic-actions button { width: 100%; min-height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; text-align: left; font-size: 13px; }
+.topic-actions button:hover { background: #f1f1ef; }
+.topic-actions button.danger { color: #9d4545; }
+.topic-rename-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px; gap: 3px; padding: 3px; }
+.topic-rename-form input { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid #b9c3d2; border-radius: 7px; background: #fff; outline: 0; font-size: 13px; }
+.topic-rename-form button { width: 30px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.topic-rename-form button:hover { background: rgba(0,0,0,.05); }
+.topic-rename-form button:disabled { cursor: not-allowed; opacity: .35; }
 .sidebar-bottom { position: relative; margin-top: auto; display: grid; gap: 2px; }
 .trash-link span { margin-left: auto; min-width: 20px; height: 20px; display: grid; place-items: center; border-radius: 10px; background: #e1e1de; color: #777; font-size: 11px; }
 .info-button span { margin-left: auto; color: #858585; font-size: 12px; }
@@ -45,14 +59,15 @@ kbd { font-family: inherit; font-size: 11px; color: #858585; background: transpa
 .library-header p { margin: 8px 0 0; color: #888; font-size: 13px; }
 .sort-control { height: 38px; display: flex; align-items: center; gap: 5px; color: #6d6d6d; font-size: 13px; }
 .sort-control select { appearance: none; padding: 0; color: #2c2c2c; border: 0; outline: 0; background: transparent; cursor: pointer; }
-.prompt-grid { display: grid; grid-template-columns: repeat(3, minmax(170px, 1fr)); gap: 18px; }
+.prompt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 320px)); align-items: start; justify-content: start; gap: 20px; }
 .prompt-card { position: relative; min-height: 188px; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid #dededb; border-radius: 12px; cursor: pointer; box-shadow: 0 1px 1px rgba(0,0,0,.015); transition: transform 160ms var(--ease-out), border-color 160ms ease, box-shadow 160ms ease; }
 @media (hover: hover) and (pointer: fine) { .prompt-card:hover { border-color: #c9c9c5; box-shadow: 0 8px 20px rgba(0,0,0,.055); } }
 .prompt-card:active { transform: scale(.988); }
 .prompt-card.selected { border-color: #4a6083; box-shadow: 0 0 0 1px rgba(47,71,112,.18); }
-.card-preview { width: calc(100% - 20px); height: 100px; margin: 10px 10px 0; display: block; object-fit: cover; border-radius: 8px; background: #ecece9; }
+.prompt-card:has(.card-preview) { min-height: 342px; }
+.card-preview { width: calc(100% - 20px); height: auto; aspect-ratio: 4 / 3; margin: 10px 10px 0; display: block; object-fit: contain; border-radius: 8px; background: #f1f1ee; }
 .card-content { flex: 1; min-height: 118px; padding: 18px 13px 12px; display: flex; flex-direction: column; }
-.card-preview + .card-content { min-height: 92px; padding-top: 11px; }
+.card-preview + .card-content { min-height: 107px; padding-top: 13px; }
 .prompt-card h3 { max-width: calc(100% - 22px); margin: 0; font-size: 15px; line-height: 1.25; letter-spacing: -.015em; font-weight: 610; }
 .favorite-button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; border-radius: 8px; cursor: pointer; }
 .prompt-card > .favorite-button { position: absolute; top: 8px; left: 8px; z-index: 2; background: rgba(255,255,255,.88); backdrop-filter: blur(8px); }
@@ -98,7 +113,7 @@ kbd { font-family: inherit; font-size: 11px; color: #858585; background: transpa
 .prompt-body code { padding: 1px 4px; border-radius: 4px; background: #f0f0ee; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
 .body-space { height: 16px; }
 .body-list-row { padding-left: 2px; }
-.detail-preview { width: 100%; aspect-ratio: 2 / 1; display: block; object-fit: cover; border-radius: 10px; background: #ecece9; }
+.detail-preview { width: 100%; height: auto; max-height: 520px; display: block; object-fit: contain; border-radius: 10px; background: #f1f1ee; }
 .delete-button { margin-top: 26px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 0; border: 0; background: transparent; color: #a24f4f; cursor: pointer; font-size: 12px; }
 .prompt-form { display: grid; gap: 20px; }
 .prompt-form label > span, .topic-field > span, .preview-input-heading > span { display: block; margin-bottom: 8px; color: #606060; font-size: 12px; font-weight: 620; }
@@ -120,7 +135,7 @@ kbd { font-family: inherit; font-size: 11px; color: #858585; background: transpa
 .editor-field textarea { padding-top: 48px; }
 .preview-input-heading { display: flex; justify-content: space-between; }
 .preview-input-heading button { padding: 0; border: 0; background: transparent; color: #a24f4f; cursor: pointer; font-size: 11px; }
-.preview-input > img { width: 100%; aspect-ratio: 4 / 3; display: block; object-fit: cover; border-radius: 10px; }
+.preview-input > img { width: 100%; height: auto; max-height: 420px; display: block; object-fit: contain; border-radius: 10px; background: #f1f1ee; }
 .paste-zone { width: 100%; height: 126px; display: grid; place-items: center; align-content: center; gap: 5px; color: #6f6f6f; border: 1px dashed #cacac6; border-radius: 10px; background: #f8f8f6; cursor: pointer; }
 .paste-zone strong { color: #4b4b4b; font-size: 12px; }
 .paste-zone small { font-size: 11px; }
@@ -135,6 +150,6 @@ kbd { font-family: inherit; font-size: 11px; color: #858585; background: transpa
 .trash-item { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 14px; background: #fff; border: 1px solid #dededb; border-radius: 11px; }
 .trash-item h3 { margin: 0 0 7px; font-size: 14px; }
 .trash-item span { display: flex; align-items: center; gap: 6px; color: #858585; font-size: 12px; }
-@media (max-width: 1260px) { :root { --sidebar-width: 230px; --panel-width: 380px; } .prompt-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); } .library { padding-inline: 22px; } }
+@media (max-width: 1260px) { :root { --sidebar-width: 230px; --panel-width: 380px; } .prompt-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 300px)); } .library { padding-inline: 22px; } }
 @media (max-width: 1040px) { .app-shell.has-panel { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); } .detail-panel { position: fixed; right: 0; top: 0; width: min(430px, calc(100vw - 230px)); box-shadow: -18px 0 45px rgba(0,0,0,.12); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 120ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } .detail-panel, .info-popover { transform: none !important; } .prompt-card:hover { transform: none; } }

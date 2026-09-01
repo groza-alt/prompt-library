@@ -247,6 +247,9 @@ export function App() {
   const [newTopicOpen, setNewTopicOpen] = useState(false);
   const [newTopic, setNewTopic] = useState("");
   const [dragTopic, setDragTopic] = useState(null);
+  const [topicMenu, setTopicMenu] = useState(null);
+  const [renamingTopic, setRenamingTopic] = useState(null);
+  const [topicRename, setTopicRename] = useState("");
   const searchRef = useRef(null);
   const selectedPrompt = prompts.find((prompt) => prompt.id === selectedId) || null;
 
@@ -280,11 +283,25 @@ export function App() {
     const onKeyDown = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); searchRef.current?.focus(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") { event.preventDefault(); setPanelMode("create"); setSelectedId(null); }
-      if (event.key === "Escape") { setInfoOpen(false); if (panelMode !== "closed") setPanelMode("closed"); }
+      if (event.key === "Escape") {
+        setInfoOpen(false);
+        setTopicMenu(null);
+        setRenamingTopic(null);
+        if (panelMode !== "closed") setPanelMode("closed");
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [panelMode]);
+
+  useEffect(() => {
+    if (!topicMenu) return undefined;
+    const closeMenu = (event) => {
+      if (!event.target.closest("[data-topic-menu]")) setTopicMenu(null);
+    };
+    window.addEventListener("pointerdown", closeMenu);
+    return () => window.removeEventListener("pointerdown", closeMenu);
+  }, [topicMenu]);
 
   const copyPrompt = async (prompt) => {
     try { await navigator.clipboard.writeText(prompt.content); setCopiedId(prompt.id); window.setTimeout(() => setCopiedId(null), 1400); } catch { setCopiedId(null); }
@@ -334,6 +351,32 @@ export function App() {
     setTopics((items) => { const next = items.filter((item) => item !== dragTopic); next.splice(next.indexOf(target), 0, dragTopic); return next; });
     setDragTopic(null);
   };
+  const startTopicRename = (topic) => {
+    setTopicMenu(null);
+    setRenamingTopic(topic);
+    setTopicRename(topic);
+  };
+  const saveTopicRename = (event) => {
+    event?.preventDefault();
+    const value = topicRename.trim();
+    if (!renamingTopic || !value) return;
+    const duplicate = topics.some((topic) => topic !== renamingTopic && topic.toLocaleLowerCase("ru") === value.toLocaleLowerCase("ru"));
+    if (duplicate) return;
+    setTopics((items) => items.map((topic) => topic === renamingTopic ? value : topic));
+    setPrompts((items) => items.map((prompt) => prompt.topic === renamingTopic ? { ...prompt, topic: value, updatedAt: Date.now() } : prompt));
+    setTrash((items) => items.map((prompt) => prompt.topic === renamingTopic ? { ...prompt, topic: value } : prompt));
+    if (activeView === renamingTopic) setActiveView(value);
+    setRenamingTopic(null);
+    setTopicRename("");
+  };
+  const deleteTopic = (topic) => {
+    setTopics((items) => items.filter((item) => item !== topic));
+    setPrompts((items) => items.map((prompt) => prompt.topic === topic ? { ...prompt, topic: "Без темы", updatedAt: Date.now() } : prompt));
+    setTrash((items) => items.map((prompt) => prompt.topic === topic ? { ...prompt, topic: "Без темы" } : prompt));
+    if (activeView === topic) setActiveView("all");
+    setTopicMenu(null);
+    if (renamingTopic === topic) setRenamingTopic(null);
+  };
   const currentTitle = activeView === "all" ? "Промпты" : activeView === "favorites" ? "Избранное" : activeView === "trash" ? "Корзина" : activeView;
 
   return (
@@ -349,7 +392,30 @@ export function App() {
         <div className="topics-heading"><span>Мои темы</span><button onClick={() => setNewTopicOpen((value) => !value)} aria-label="Добавить тему"><Icon name="plus" size={16} /></button></div>
         {newTopicOpen && <form className="new-topic-form" onSubmit={addTopic}><input autoFocus value={newTopic} onChange={(event) => setNewTopic(event.target.value)} placeholder="Название темы" /></form>}
         <nav className="topic-nav" aria-label="Темы">
-          {topics.map((topic) => <button key={topic} draggable onDragStart={() => setDragTopic(topic)} onDragOver={(event) => event.preventDefault()} onDrop={() => reorderTopic(topic)} className={activeView === topic ? "active" : ""} onClick={() => setActiveView(topic)}><Icon name="folder" size={18} /><span>{topic}</span><Icon name="grip" size={16} /></button>)}
+          {topics.map((topic) => (
+            <div key={topic} className={`topic-item${activeView === topic ? " active" : ""}`} draggable={renamingTopic !== topic} onDragStart={() => setDragTopic(topic)} onDragOver={(event) => event.preventDefault()} onDrop={() => reorderTopic(topic)} data-topic-menu>
+              {renamingTopic === topic ? (
+                <form className="topic-rename-form" onSubmit={saveTopicRename}>
+                  <input autoFocus value={topicRename} onChange={(event) => setTopicRename(event.target.value)} onKeyDown={(event) => {
+                    if (event.key === "Escape") { event.stopPropagation(); setRenamingTopic(null); setTopicRename(""); }
+                  }} aria-label="Новое название темы" maxLength={60} />
+                  <button type="submit" aria-label="Сохранить название" disabled={!topicRename.trim()}><Icon name="check" size={16} /></button>
+                  <button type="button" aria-label="Отменить переименование" onClick={() => { setRenamingTopic(null); setTopicRename(""); }}><Icon name="close" size={16} /></button>
+                </form>
+              ) : (
+                <>
+                  <button className="topic-select" onClick={() => { setActiveView(topic); setTopicMenu(null); }}><Icon name="folder" size={18} /><span>{topic}</span></button>
+                  <button className="topic-menu-button" onClick={() => setTopicMenu((current) => current === topic ? null : topic)} aria-label={`Меню темы «${topic}»`} aria-haspopup="menu" aria-expanded={topicMenu === topic}><Icon name="grip" size={17} /></button>
+                  {topicMenu === topic && (
+                    <div className="topic-actions" role="menu">
+                      <button type="button" role="menuitem" onClick={() => startTopicRename(topic)}><Icon name="pencil" size={16} />Переименовать</button>
+                      <button type="button" role="menuitem" className="danger" onClick={() => deleteTopic(topic)}><Icon name="trash" size={16} />Удалить тему</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
         </nav>
         <div className="sidebar-bottom">
           <button className={`trash-link${activeView === "trash" ? " active" : ""}`} title={`${trash.length} удалено`} onClick={() => { setActiveView("trash"); setPanelMode("closed"); }}><Icon name="trash" size={17} />Корзина{trash.length > 0 && <span>{trash.length}</span>}</button>
