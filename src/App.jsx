@@ -1,30 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-const topicSeed = [];
-const promptSeed = [];
-
-function readStoredValue(key, fallback) {
-  try {
-    const stored = window.localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function usePersistentState(key, initialValue) {
-  const [value, setValue] = useState(() => readStoredValue(key, initialValue));
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // The app remains usable when browser storage is unavailable or full.
-    }
-  }, [key, value]);
-
-  return [value, setValue];
-}
+import { emptyLibrary, loadCloudLibrary, readLegacyLibrary, saveCloudLibrary } from "./cloudLibrary";
+import { supabase } from "./supabaseClient";
 
 const publicAsset = (path) => `${import.meta.env.BASE_URL}${path}`;
 
@@ -127,7 +103,7 @@ function FormatToolbar({ textareaRef, value, onChange }) {
 }
 
 function EditorPanel({ mode, prompt, topics, onClose, onCreate, onUpdate, onAddTopic }) {
-  const [draft, setDraft] = useState(() => ({ title: prompt?.title || "", topic: prompt?.topic || topics[0] || "Без темы", content: prompt?.content || "", image: prompt?.image || null }));
+  const [draft, setDraft] = useState(() => ({ title: prompt?.title || "", topic: prompt?.topic || topics[0] || "Без темы", content: prompt?.content || "", image: prompt?.image || null, imagePath: prompt?.imagePath || null }));
   const [saved, setSaved] = useState(false);
   const [topicCreatorOpen, setTopicCreatorOpen] = useState(false);
   const [topicName, setTopicName] = useState("");
@@ -135,7 +111,7 @@ function EditorPanel({ mode, prompt, topics, onClose, onCreate, onUpdate, onAddT
   const fileRef = useRef(null);
 
   useEffect(() => {
-    setDraft({ title: prompt?.title || "", topic: prompt?.topic || topics[0] || "Без темы", content: prompt?.content || "", image: prompt?.image || null });
+    setDraft({ title: prompt?.title || "", topic: prompt?.topic || topics[0] || "Без темы", content: prompt?.content || "", image: prompt?.image || null, imagePath: prompt?.imagePath || null });
   }, [prompt?.id, mode]);
 
   useEffect(() => {
@@ -151,7 +127,7 @@ function EditorPanel({ mode, prompt, topics, onClose, onCreate, onUpdate, onAddT
   const readImage = (file) => {
     if (!file?.type.startsWith("image/")) return;
     const reader = new FileReader();
-    reader.onload = () => setDraft((current) => ({ ...current, image: reader.result }));
+    reader.onload = () => setDraft((current) => ({ ...current, image: reader.result, imagePath: null }));
     reader.readAsDataURL(file);
   };
   const handlePaste = (event) => {
@@ -202,7 +178,7 @@ function EditorPanel({ mode, prompt, topics, onClose, onCreate, onUpdate, onAddT
           <textarea ref={textareaRef} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Вставьте или напишите промпт…" />
         </label>
         <div className="preview-input">
-          <div className="preview-input-heading"><span>Превью</span>{draft.image && <button type="button" onClick={() => setDraft({ ...draft, image: null })}>Удалить</button>}</div>
+          <div className="preview-input-heading"><span>Превью</span>{draft.image && <button type="button" onClick={() => setDraft({ ...draft, image: null, imagePath: null })}>Удалить</button>}</div>
           {draft.image ? <img src={draft.image} alt="Превью промпта" /> : (
             <button type="button" className="paste-zone" onClick={() => fileRef.current?.click()}><Icon name="photo" size={22} /><strong>Вставьте изображение</strong><small>⌘V или выберите файл</small></button>
           )}
@@ -233,10 +209,125 @@ function DetailPanel({ prompt, copied, onClose, onCopy, onEdit, onFavorite, onDe
   );
 }
 
+function AuthScreen() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState("idle");
+  const [message, setMessage] = useState("");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!email.trim()) return;
+    setState("sending");
+    setMessage("");
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: window.location.href.split("#")[0],
+      },
+    });
+    if (error) {
+      setState("error");
+      setMessage("Не удалось отправить ссылку. Проверьте почту или попробуйте позже.");
+      return;
+    }
+    setState("sent");
+    setMessage("Ссылка для входа отправлена на вашу почту.");
+  };
+
+  return (
+    <main className="auth-screen">
+      <form className="auth-card" onSubmit={submit}>
+        <div className="brand">Quiet Shelf</div>
+        <div>
+          <h1>Вход в библиотеку</h1>
+          <p>Введите личную почту. Мы пришлём одноразовую ссылку для входа.</p>
+        </div>
+        <label><span>Почта</span><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required /></label>
+        <button className="primary-button" type="submit" disabled={state === "sending"}>{state === "sending" ? "Отправляем…" : "Получить ссылку"}</button>
+        {message && <p className={`auth-message ${state}`} role="status">{message}</p>}
+      </form>
+    </main>
+  );
+}
+
+function useCloudLibrary(session) {
+  const [library, setLibrary] = useState(emptyLibrary);
+  const [ready, setReady] = useState(false);
+  const [storageStatus, setStorageStatus] = useState("loading");
+  const saveQueue = useRef(Promise.resolve());
+  const version = useRef(0);
+
+  useEffect(() => {
+    if (!session?.user?.id) return undefined;
+    let active = true;
+    setReady(false);
+    setStorageStatus("loading");
+
+    (async () => {
+      try {
+        let next = await loadCloudLibrary(session.user.id);
+        if (!next) {
+          next = readLegacyLibrary();
+          next = await saveCloudLibrary(session.user.id, next);
+        }
+        if (!active) return;
+        setLibrary(next);
+        setReady(true);
+        setStorageStatus("saved");
+      } catch (error) {
+        console.error("Cloud library load failed", error);
+        if (!active) return;
+        setStorageStatus("error");
+      }
+    })();
+
+    return () => { active = false; };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!ready || !session?.user?.id) return;
+    const currentVersion = ++version.current;
+    const snapshot = library;
+    const hasPendingImages = [...snapshot.prompts, ...snapshot.trash].some((prompt) => prompt.image?.startsWith("data:image/"));
+    setStorageStatus("saving");
+
+    saveQueue.current = saveQueue.current
+      .catch(() => undefined)
+      .then(() => saveCloudLibrary(session.user.id, snapshot))
+      .then((prepared) => {
+        if (currentVersion !== version.current) return;
+        if (hasPendingImages) setLibrary(prepared);
+        setStorageStatus("saved");
+      })
+      .catch((error) => {
+        console.error("Cloud library save failed", error);
+        if (currentVersion === version.current) setStorageStatus("error");
+      });
+  }, [library, ready, session?.user?.id]);
+
+  const setPart = useCallback((part, update) => {
+    setLibrary((current) => ({
+      ...current,
+      [part]: typeof update === "function" ? update(current[part]) : update,
+    }));
+  }, []);
+
+  return {
+    prompts: library.prompts,
+    topics: library.topics,
+    trash: library.trash,
+    setPrompts: useCallback((update) => setPart("prompts", update), [setPart]),
+    setTopics: useCallback((update) => setPart("topics", update), [setPart]),
+    setTrash: useCallback((update) => setPart("trash", update), [setPart]),
+    ready,
+    storageStatus,
+  };
+}
+
 export function App() {
-  const [prompts, setPrompts] = usePersistentState("quiet-shelf.prompts.v1", promptSeed);
-  const [topics, setTopics] = usePersistentState("quiet-shelf.topics.v1", topicSeed);
-  const [trash, setTrash] = usePersistentState("quiet-shelf.trash.v1", []);
+  const [session, setSession] = useState(undefined);
+  const { prompts, topics, trash, setPrompts, setTopics, setTrash, ready, storageStatus } = useCloudLibrary(session);
   const [activeView, setActiveView] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
   const [panelMode, setPanelMode] = useState("closed");
@@ -252,6 +343,20 @@ export function App() {
   const [topicRename, setTopicRename] = useState("");
   const searchRef = useRef(null);
   const selectedPrompt = prompts.find((prompt) => prompt.id === selectedId) || null;
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setSession(data.session || null);
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (active) setSession(nextSession);
+    });
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const promptTopics = prompts.map((prompt) => prompt.topic).filter((topic) => topic && topic !== "Без темы");
@@ -377,6 +482,19 @@ export function App() {
     setTopicMenu(null);
     if (renamingTopic === topic) setRenamingTopic(null);
   };
+
+  if (session === undefined) return <main className="auth-screen"><div className="auth-loading">Загружаем библиотеку…</div></main>;
+  if (!session) return <AuthScreen />;
+  if (!ready) {
+    return (
+      <main className="auth-screen">
+        <div className={`auth-loading ${storageStatus === "error" ? "error" : ""}`}>
+          {storageStatus === "error" ? "Не удалось открыть облачную библиотеку." : "Загружаем библиотеку…"}
+        </div>
+      </main>
+    );
+  }
+
   const currentTitle = activeView === "all" ? "Промпты" : activeView === "favorites" ? "Избранное" : activeView === "trash" ? "Корзина" : activeView;
 
   return (
@@ -418,6 +536,9 @@ export function App() {
           ))}
         </nav>
         <div className="sidebar-bottom">
+          <div className={`cloud-status ${storageStatus}`} role="status">
+            <span />{storageStatus === "saving" ? "Сохраняем…" : storageStatus === "error" ? "Не сохранено" : "Сохранено в облаке"}
+          </div>
           <button className={`trash-link${activeView === "trash" ? " active" : ""}`} title={`${trash.length} удалено`} onClick={() => { setActiveView("trash"); setPanelMode("closed"); }}><Icon name="trash" size={17} />Корзина{trash.length > 0 && <span>{trash.length}</span>}</button>
           <button className="info-button" onClick={() => setInfoOpen((value) => !value)}><Icon name="info" size={19} />Инфо<span>⌘/</span></button>
           {infoOpen && <div className="info-popover"><strong>Сочетания клавиш</strong><div><span>Поиск</span><kbd>⌘K</kbd></div><div><span>Новый промпт</span><kbd>⌘N</kbd></div><div><span>Сохранить</span><kbd>⌘↵</kbd></div><div><span>Закрыть панель</span><kbd>Esc</kbd></div><p>Личная библиотека. Доступ только владельцу.</p></div>}

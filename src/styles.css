@@ -3,6 +3,17 @@
 body { margin: 0; min-width: 980px; min-height: 100vh; background: #f8f8f7; -webkit-font-smoothing: antialiased; }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
+.auth-screen { min-height: 100vh; display: grid; place-items: center; padding: 32px; background: #f5f5f2; }
+.auth-card { width: min(100%, 390px); display: grid; gap: 24px; padding: 30px; background: #fff; border: 1px solid #deded9; border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,.06); }
+.auth-card h1 { margin: 0 0 7px; font-size: 25px; letter-spacing: -.035em; }
+.auth-card p { margin: 0; color: #777; font-size: 13px; line-height: 1.5; }
+.auth-card label span { display: block; margin-bottom: 8px; color: #606060; font-size: 12px; font-weight: 620; }
+.auth-card input { width: 100%; height: 44px; padding: 0 12px; border: 1px solid #d4d4d0; border-radius: 9px; outline: 0; }
+.auth-card input:focus { border-color: #7889a6; box-shadow: 0 0 0 3px rgba(47,71,112,.09); }
+.auth-card .primary-button { width: 100%; }
+.auth-card .auth-message { color: #52715b; }
+.auth-card .auth-message.error, .auth-loading.error { color: #9d4545; }
+.auth-loading { color: #737373; font-size: 14px; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid rgba(47, 71, 112, .55); outline-offset: 2px; }
 .icon { display: block; flex: 0 0 auto; opacity: .74; }
 .icon-light { filter: invert(1); opacity: 1; }
@@ -46,6 +57,11 @@ kbd { font-family: inherit; font-size: 11px; color: #858585; background: transpa
 .topic-rename-form button:hover { background: rgba(0,0,0,.05); }
 .topic-rename-form button:disabled { cursor: not-allowed; opacity: .35; }
 .sidebar-bottom { position: relative; margin-top: auto; display: grid; gap: 2px; }
+.cloud-status { min-height: 31px; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: #6f766f; font-size: 11px; }
+.cloud-status span { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #65916e; }
+.cloud-status.saving span { background: #c1974f; }
+.cloud-status.error { color: #9d4545; }
+.cloud-status.error span { background: #b65e5e; }
 .trash-link span { margin-left: auto; min-width: 20px; height: 20px; display: grid; place-items: center; border-radius: 10px; background: #e1e1de; color: #777; font-size: 11px; }
 .info-button span { margin-left: auto; color: #858585; font-size: 12px; }
 .info-popover { position: absolute; left: 0; bottom: 45px; width: 224px; padding: 14px; background: rgba(255,255,255,.94); backdrop-filter: blur(18px) saturate(150%); border: 1px solid rgba(0,0,0,.1); border-radius: 12px; box-shadow: 0 14px 36px rgba(0,0,0,.12); transform-origin: 20px calc(100% + 8px); opacity: 1; transform: scale(1) translateY(0); transition: opacity 170ms var(--ease-out), transform 170ms var(--ease-out); z-index: 10; }
